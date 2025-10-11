@@ -1,5 +1,6 @@
 from . import config, logging, notifier
 
+
 def main():
     logging.set_up_logging("rsdb-map") # Set up logging
 
