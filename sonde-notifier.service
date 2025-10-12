@@ -1,0 +1,15 @@
+[Unit]
+Description=Sonde Notifier
+After=network.target auto_rx.service
+
+[Service]
+ExecStart=/home/<your_user>/sonde-notifier/venv/bin/python3 /home/<your_user>/sonde-notifier/venv/bin/sonde-notifier
+Restart=always
+RestartSec=120
+WorkingDirectory=/home/<your_user>/sonde-notifier
+User=<your_user>
+SyslogIdentifier=sonde-notifier
+StandardOutput=null
+
+[Install]
+WantedBy=multi-user.target
