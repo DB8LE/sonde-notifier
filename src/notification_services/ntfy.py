@@ -1,4 +1,4 @@
-import logging, base64
+import base64
 from typing import Any, Dict
 
 import requests
@@ -28,7 +28,7 @@ class NtfyNotifier(NotificationService):
         elif notification_type.startswith("prediction_range_ring_"):
             notification_string = f"A landing prediction for an {sonde_type} sonde has triggered range ring {notification_type[-1:]}. (Serial: {serial})"
         else:
-            notification_string = f"ERROR" # Not reachable ATM
+            notification_string = "ERROR" # Not reachable ATM
 
         requests.post(
             self.topic_url,

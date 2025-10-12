@@ -149,7 +149,7 @@ class Notifier:
         """Internal function to predict the landing position of a sonde"""
 
         altitude = int(altitude)
-        logging.debug(f"Running prediction for {latitude}, {longitude}, {altitude}m {"descending" if descending else "rising"}")
+        logging.debug(f"Running prediction for {latitude}, {longitude}, {altitude}m {'descending' if descending else 'rising'}")
 
         # If sonde is descending, set burst point to altitude to skip ascent
         if descending:
@@ -164,9 +164,9 @@ class Notifier:
                                    f"&launch_longitude={longitude}" \
                                    f"&launch_altitude={altitude}" \
                                    f"&launch_datetime={time_formatted}Z" \
-                                   f"&ascent_rate={self.config["prediction"]["ascent_rate"]}" \
+                                   f"&ascent_rate={self.config['prediction']['ascent_rate']}" \
                                    f"&burst_altitude={burst_altitude}" \
-                                   f"&descent_rate={self.config["prediction"]["descent_rate"]}"
+                                   f"&descent_rate={self.config['prediction']['descent_rate']}"
 
         # Make request and load response json
         request = requests.get(url)
@@ -196,7 +196,7 @@ class Notifier:
                 altitude = values[3]
 
                 triggered_ring = self._check_range_rings(serial, distance, altitude)
-                if triggered_ring != None:
+                if triggered_ring is not None:
                     self._notify(triggered_ring, serial, values[4], distance)
                     self._set_ring_notified(serial, triggered_ring)
 
@@ -230,7 +230,7 @@ class Notifier:
 
                     # Check for range ring hits
                     triggered_ring = self._check_range_rings(serial, prediction_distance, prediction["altitude"], "prediction_") # type: ignore
-                    if triggered_ring != None:
+                    if triggered_ring is not None:
                         self._notify("prediction_"+triggered_ring, serial, values[4], prediction_distance)
                         self._set_ring_notified(serial, triggered_ring, "prediction_")
 
