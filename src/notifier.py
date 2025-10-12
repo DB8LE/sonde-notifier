@@ -124,16 +124,18 @@ class Notifier:
 
             # Check if ring should be triggered
             if (int(distance) <= filters[0]) and (int(altitude) <= filters[1]):
-                # Add this and larger rings to notified_sondes list TODO: Move this to seperate function
-                current_ring_id = int(ring[-1:])
-                for block_ring in self.range_rings.keys():
-                    block_ring_id = int(block_ring[-1:])
-                    if block_ring_id >= current_ring_id:
-                        self.notified_sondes[serial].append(ring_prefix+block_ring)
-
                 return ring # Only return ring with smallest radius (range_rings list is sorted by asc. radius)
 
         return None
+    
+    def _set_ring_notified(self, serial: str, ring: str, ring_prefix: str = ""):
+        """Internal function to add a ring and all larger rings to the notified list of a sondes"""
+
+        current_ring_id = int(ring[-1:])
+        for block_ring in self.range_rings.keys():
+            block_ring_id = int(block_ring[-1:])
+            if block_ring_id >= current_ring_id:
+                self.notified_sondes[serial].append(ring_prefix+block_ring)
 
     def _landing_prediction(self,
                             time: datetime,
@@ -194,7 +196,7 @@ class Notifier:
                 triggered_ring = self._check_range_rings(serial, distance, altitude)
                 if triggered_ring != None:
                     self._notify(triggered_ring, serial, values[4], distance)
-                    pass
+                    self._set_ring_notified(serial, triggered_ring)
 
                 if self.prediction_enabled:
                     # Only run if 3 frames have been received yet
@@ -228,6 +230,7 @@ class Notifier:
                     triggered_ring = self._check_range_rings(serial, prediction_distance, prediction["altitude"], "prediction_") # type: ignore
                     if triggered_ring != None:
                         self._notify("prediction_"+triggered_ring, serial, values[4], prediction_distance)
+                        self._set_ring_notified(serial, triggered_ring, "prediction_")
 
     def run(self):
         """Run notifier"""
