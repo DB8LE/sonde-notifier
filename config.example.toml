@@ -40,7 +40,7 @@ max_altitude = 8 # Maximum altitude of the sonde in kilometers
 # Notification services
 [ntfy]
 enabled = false
-topic_url = ""
+topic_url = "https://ntfy.sh/..."
 auth_user = ""
 auth_password = ""
 auth_token = "" # Auth token (overrides user&password if set)
