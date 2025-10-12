@@ -25,3 +25,12 @@ max_altitude = 3 # Maximum altitude of the sonde in kilometers
 [range_ring_2]
 radius = 50 # Radius in kilometers
 max_altitude = 8 # Maximum altitude of the sonde in kilometers
+
+
+# Notification services
+[ntfy]
+enabled = false
+topic_url = ""
+auth_user = ""
+auth_password = ""
+auth_token = "" # Auth token (overrides user&password if set)

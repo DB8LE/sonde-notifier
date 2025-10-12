@@ -3,11 +3,12 @@ import time
 import traceback
 from collections import defaultdict
 from threading import Lock
-from typing import Any, Dict
+from typing import Any, Dict, List, Type
 
 import geopy.distance
 
 from . import autorx
+from .notification_services import *
 
 TRACKED_SONDES_MAX_SECONDS = 2*60*60
 
@@ -35,6 +36,13 @@ class Notifier:
                 )
         sorted_rings_items = sorted(self.range_rings.items(), key=lambda item: item[1][0])
         self.range_rings = {k: v for k, v in sorted_rings_items}
+
+        # Prepare list of notification services from config
+        logging.debug("Initializing notification services")
+        self.notification_services: List[NotificationService] = []
+
+        if config["ntfy"]["enabled"]:
+            self.notification_services.append(NtfyNotifier(config["ntfy"]))
 
     def _handle_packet(self, packet: Dict[str, Any]):
         """Internal callback function to handle payload summaries from AutoRX"""
@@ -82,6 +90,9 @@ class Notifier:
 
         logging.info(f"Sending notifications for {notification_type} of sonde {serial} ({sonde_type})")
 
+        for service in self.notification_services:
+            service.notify(notification_type, serial, sonde_type, distance)
+
     def _check_notifications(self):
         """Internal function to check if notifications need to be sent"""
 
@@ -105,6 +116,15 @@ class Notifier:
                     # Check if ring should be triggered
                     if (distance <= filters[0]) and (altitude <= filters[1]):
                         self._notify(ring, serial, values[4], distance)
+
+                        # Add this and larger rings to notified_sondes list
+                        current_ring_id = int(ring[-1:])
+                        for block_ring in self.range_rings.keys():
+                            block_ring_id = int(block_ring[-1:])
+                            if block_ring_id >= current_ring_id:
+                                # TODO: so many indents...
+                                self.notified_sondes[serial].append(block_ring)
+
                         break # Only notify for ring with smallest radius (range_rings list is sorted by asc. radius)
 
     def run(self):
