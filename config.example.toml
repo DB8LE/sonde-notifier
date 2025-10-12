@@ -9,3 +9,19 @@ journal_debug = false # Enable debug logging level on the systemd journal (if en
 
 [autorx]
 port = 55673 # UDP port that autorx sends its payload summaries to
+
+[station]
+latitude = 0.0 # Latitude of your receiver
+longitude = 0.0 # Longitude of your receiver
+
+[notifier]
+check_interval = 5 # Interval in minutes between checks if notifications should be sent
+
+# Define as many range rings as you'd like
+[range_ring_1]
+radius = 10 # Radius in kilometers
+max_altitude = 3 # Maximum altitude of the sonde in kilometers
+
+[range_ring_2]
+radius = 50 # Radius in kilometers
+max_altitude = 8 # Maximum altitude of the sonde in kilometers

@@ -39,7 +39,15 @@ def read_config() -> Dict[str, Any]:
             with open("config.example.toml", "rb") as f:
                 config_example_data = tomllib.load(f)
 
-            if _extract_toml_keys(_config_data) != _extract_toml_keys(config_example_data):
+            # Extract keys
+            config_keys = _extract_toml_keys(_config_data)
+            config_example_keys = _extract_toml_keys(config_example_data)
+
+            # Filter keys to exclude range rings
+            config_keys = {k: v for k, v in config_keys.items() if not k.startswith("range_ring_")}
+            config_example_keys = {k: v for k, v in config_example_keys.items() if not k.startswith("range_ring_")}
+
+            if config_keys != config_example_keys:
                 logging.error("Config file contains unexpected keys. Either the config file or the example config file contain invalid keys.")
                 exit(1)
 
