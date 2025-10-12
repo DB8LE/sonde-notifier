@@ -14,7 +14,7 @@ import geopy.distance
 from . import autorx
 from .notification_services import *
 
-TRACKED_SONDES_MAX_SECONDS = 2*60*60
+TRACKED_SONDES_MAX_SECONDS = 5*60*60
 
 class Notifier:
     def __init__(self, config: Dict[str, Any]) -> None:
@@ -22,6 +22,7 @@ class Notifier:
 
         self.config = config
         self.notify_check_interval = config["notifier"]["check_interval"]*60
+        self.only_predict_descending = config["prediction"]["only_predict_descending"]
         self.station_position = (config["station"]["latitude"], config["station"]["longitude"])
 
         self.prediction_enabled = config["prediction"]["enabled"]
@@ -29,7 +30,7 @@ class Notifier:
         
         # FIXME: All of there dicts could have a value in them forever because of the listener thread waiting for lock
         # while they're being cleaned
-        self.sondes_altitudes = defaultdict(lambda: queue.Queue(maxsize=3))
+        self.sondes_altitudes = defaultdict(lambda: queue.Queue(maxsize=5))
         self.sondes_altitudes_lock = Lock()
 
         self.tracked_sondes = {}
@@ -214,6 +215,10 @@ class Notifier:
 
                     # Determine wether sonde is descending or not
                     is_descending = all(alts[i] > alts[i+1] for i in range(len(alts) - 1))
+
+                    # If option to only predict for descending sondes is set and sonde is not descending, skip
+                    if self.only_predict_descending and (not is_descending):
+                        continue
 
                     # Run prediction
                     now = datetime.now(timezone.utc)

@@ -23,6 +23,9 @@ api_url = "https://api.v2.sondehub.org/tawhiri" # URL to the prediction API.
                                                 # I highly recommend self-hosting this,
                                                 # to prevent leeching off of sondehubs resources.
                                                 # (https://github.com/projecthorus/tawhiri)
+only_predict_descending = true # Only run prediction for sondes that are descending.
+                               # Recommended, as predictions are usually a lot more accurate
+                               # when sondes are descending
 ascent_rate = 5 # Ascent rate in m/s for prediction
 burst_altitude = 30 # Burst altitude in km for prediction
 descent_rate = 10 # Descent rate in m/s for prediction
