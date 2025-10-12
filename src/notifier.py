@@ -27,6 +27,8 @@ class Notifier:
         self.prediction_enabled = config["prediction"]["enabled"]
         self.tawhiri_api_url = config["prediction"]["api_url"]
         
+        # FIXME: All of there dicts could have a value in them forever because of the listener thread waiting for lock
+        # while they're being cleaned
         self.sondes_altitudes = defaultdict(lambda: queue.Queue(maxsize=3))
         self.sondes_altitudes_lock = Lock()
 
