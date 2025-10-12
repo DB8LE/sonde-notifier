@@ -17,6 +17,16 @@ longitude = 0.0 # Longitude of your receiver
 [notifier]
 check_interval = 5 # Interval in minutes between checks if notifications should be sent
 
+[prediction]
+enabled = true
+api_url = "https://api.v2.sondehub.org/tawhiri" # URL to the prediction API.
+                                                # I highly recommend self-hosting this,
+                                                # to prevent leeching off of sondehubs resources.
+                                                # (https://github.com/projecthorus/tawhiri)
+ascent_rate = 5 # Ascent rate in m/s for prediction
+burst_altitude = 30 # Burst altitude in km for prediction
+descent_rate = 10 # Descent rate in m/s for prediction
+
 # Define as many range rings as you'd like
 [range_ring_1]
 radius = 10 # Radius in kilometers
