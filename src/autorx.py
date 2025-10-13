@@ -30,24 +30,25 @@ class AutoRXListener():
         except:
             pass
         
-        # Bind socket
-        self._socket.bind((self.autorx_host, self.autorx_port))
+        try:
+            # Bind socket
+            self._socket.bind((self.autorx_host, self.autorx_port))
 
-        # Start listening for packets
-        logging.info(f"Started AutoRX listener on {self.autorx_host}:{self.autorx_port}")
-        self._run_listener = True
-        while self._run_listener:
-            # Try to receive a packet
-            try:
-                packet = json.loads(self._socket.recvfrom(1024)[0])
-                if packet["type"] == "PAYLOAD_SUMMARY":
-                    self.callback(packet)
-            except socket.timeout:
-                pass
-            except (KeyboardInterrupt, Exception) as e:
-                logging.error("Caught exception while running AutoRX listener: "+str(e))
-                logging.debug(traceback.format_exc())
-                self.close()
+            # Start listening for packets
+            logging.info(f"Started AutoRX listener on {self.autorx_host}:{self.autorx_port}")
+            self._run_listener = True
+            while self._run_listener:
+                # Try to receive a packet
+                try:
+                    packet = json.loads(self._socket.recvfrom(1024)[0])
+                    if packet["type"] == "PAYLOAD_SUMMARY":
+                        self.callback(packet)
+                except socket.timeout:
+                    pass
+        except (KeyboardInterrupt, Exception) as e:
+            logging.error("Caught exception while running AutoRX listener: "+str(e))
+            logging.info(traceback.format_exc())
+            self.close()
 
     def start(self):
         """Start the AutoRX listener thread"""
@@ -61,4 +62,11 @@ class AutoRXListener():
 
         if self._listener_thread is not None:
             self._run_listener = False
-            self._listener_thread.join(timeout=3)
+
+            # This won't work if this thread is calling the function
+            try:
+                self._listener_thread.join(timeout=3)
+            except RuntimeError:
+                pass
+
+            self._listener_thread = None
