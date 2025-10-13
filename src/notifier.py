@@ -69,6 +69,10 @@ class Notifier:
         # Update internal list
         serial = packet["callsign"]
         with self.tracked_sondes_lock:
+            # Log message if sonde is new
+            if serial not in self.tracked_sondes:
+                logging.info(f"Got new {packet['model']} sonde: {serial}")
+
             self.tracked_sondes[serial] = [
                 time.time(),
                 packet["latitude"],
@@ -76,6 +80,7 @@ class Notifier:
                 packet["altitude"],
                 packet["model"]
             ]
+
         with self.sondes_altitudes_lock:
             self.sondes_altitudes[serial].put(packet["altitude"])
     
@@ -106,7 +111,8 @@ class Notifier:
 
             # Log
             if len(remove) > 0:
-                logging.debug("Removed old sondes from tracked list: "+str(remove))
+                for serial in remove:
+                    logging.info("Removed old sonde from tracked list: "+str(serial))
 
     def _notify(self, notification_type: str, serial: str, sonde_type: str, distance: float):
         """Internal function to send notifications for a specific sonde"""
