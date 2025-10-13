@@ -1,6 +1,6 @@
 [project]
 name = "sonde-notifier"
-version = "0.1.0"
+version = "0.2.0"
 description = "Get notified of incoming sondes using data from an AutoRX instance"
 authors = [
     {name = "DB8LE",email = "db8le@darc.de"}
