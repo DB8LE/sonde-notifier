@@ -245,7 +245,11 @@ class Notifier:
         logging.info("Running notifier")
         try:
             # Start AutoRX listener
-            self.autorx_listener = autorx.AutoRXListener(self.config["autorx"]["port"], self._handle_packet)
+            self.autorx_listener = autorx.AutoRXListener(
+                self.config["autorx"]["host"],
+                self.config["autorx"]["port"],
+                self._handle_packet
+            )
             self.autorx_listener.start()
 
             while True:

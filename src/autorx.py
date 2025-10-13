@@ -8,8 +8,9 @@ from typing import Any, Dict
 
 
 class AutoRXListener():
-    def __init__(self, autorx_port: int, callback: Callable[[Dict[str, Any]], None]):
+    def __init__(self, autorx_host: str, autorx_port: int, callback: Callable[[Dict[str, Any]], None]):
 
+        self.autorx_host = autorx_host
         self.autorx_port = autorx_port
         self.callback = callback
 
@@ -30,10 +31,10 @@ class AutoRXListener():
             pass
         
         # Bind socket
-        self._socket.bind(("", self.autorx_port))
+        self._socket.bind((self.autorx_host, self.autorx_port))
 
         # Start listening for packets
-        logging.info("Started AutoRX listener")
+        logging.info(f"Started AutoRX listener on {self.autorx_host}:{self.autorx_port}")
         self._run_listener = True
         while self._run_listener:
             # Try to receive a packet

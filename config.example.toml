@@ -8,6 +8,7 @@ file_debug = false # Enable debug logging level on the log file (if enabled)
 journal_debug = false # Enable debug logging level on the systemd journal (if enabled)
 
 [autorx]
+host = "" # Autorx host. Leave this empty if autorx is configured to broadcast
 port = 55673 # UDP port that autorx sends its payload summaries to
 
 [station]
