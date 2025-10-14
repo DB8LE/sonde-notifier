@@ -48,3 +48,9 @@ topic_url = "https://ntfy.sh/..."
 auth_user = ""
 auth_password = ""
 auth_token = "" # Auth token (overrides user&password if set)
+
+[gotify] # untested
+enabled = false
+url = "https://example.com/"
+app_token = ""
+

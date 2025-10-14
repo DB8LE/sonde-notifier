@@ -61,6 +61,9 @@ class Notifier:
         if config["ntfy"]["enabled"]:
             self.notification_services.append(NtfyNotifier(config["ntfy"]))
 
+        if config["gotify"]["enabled"]:
+            self.notification_services.append(GotifyNotifier(config["gotify"]))
+
     def _handle_packet(self, packet: Dict[str, Any]):
         """Internal callback function to handle payload summaries from AutoRX"""
 
