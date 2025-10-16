@@ -64,6 +64,9 @@ class Notifier:
         if config["gotify"]["enabled"]:
             self.notification_services.append(GotifyNotifier(config["gotify"]))
 
+        if config["discord_webhook"]["enabled"]:
+            self.notification_services.append(DiscordWebhookNotifier(config["discord_webhook"]))
+
     def _handle_packet(self, packet: Dict[str, Any]):
         """Internal callback function to handle payload summaries from AutoRX"""
 
