@@ -111,4 +111,4 @@ def set_up_logging(app_name: str):
             journal_handler.setLevel(logging.INFO)
             root_logger.addHandler(journal_handler)
         except ImportError:
-            logging.info("Failed to import python systemd module. Logging to the journal will be disabled. To install journald support, run poetry install with --with journald")
+            logging.info("Failed to import python systemd module. Logging to the journal will be disabled. To install journald support, run pip install with [journal] at the end or poetry install with --with journald")
