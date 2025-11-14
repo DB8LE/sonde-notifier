@@ -1,4 +1,5 @@
 import base64
+import logging
 from typing import Any, Dict
 
 import requests
@@ -30,8 +31,13 @@ class NtfyNotifier(NotificationService):
         else:
             notification_string = "ERROR" # Not reachable ATM
 
-        requests.post(
+        request = requests.post(
             self.topic_url,
             data=notification_string.encode(),
             headers={"Authorization": self.auth_header}
-        )    
+        )
+
+        if request.status_code != 200:
+            logging.error(f"Failed to send NTFY notification. Got status code {request.status_code}")
+            if request.content:
+                logging.debug(f"Erroneous NTFY request returned: {request.content}")
