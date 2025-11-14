@@ -1,3 +1,4 @@
+import copy
 import json
 import logging
 import requests
@@ -6,7 +7,7 @@ import traceback
 from collections import defaultdict, deque
 from datetime import datetime, timezone
 from threading import Lock
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal
 
 import geopy.distance
 
@@ -14,6 +15,24 @@ from . import autorx
 from .notification_services import *
 
 TRACKED_SONDES_MAX_SECONDS = 5*60*60
+
+class RangeRing:
+    def __init__(self, id: int, name: str, range: int, max_altitude: int, prefix: str = "") -> None:
+        self.id = id
+        self.name = name
+        self.range = range # meters
+        self.max_altitude = max_altitude # meters
+        self.prefix = prefix
+
+    def as_string(self, type: Literal["name", "id"], prefix_overwrite: str = "") -> str:
+        """Get the current range ring as a string in the format {prefix|prefix_overwrite_}range_ring_{name|id}"""
+
+        prefix = prefix_overwrite if prefix_overwrite != "" else self.prefix # Check wether to use prefix overwrite
+        prefix = prefix + "_" if prefix != "" else prefix # Add _ if prefix is set
+
+        suffix = self.name if type == "name" else self.id # Set suffix to either name or id
+
+        return f"{prefix}range_ring_{suffix}"
 
 class Notifier:
     def __init__(self, config: Dict[str, Any]) -> None:
@@ -37,16 +56,16 @@ class Notifier:
         self.notified_sondes_lock = Lock()
 
         # Parse range rings
-        self.range_rings = []
+        self.range_rings: List[RangeRing] = []
         try:
             for id, range_ring in enumerate(config["notifier"]["range_rings"]):
                 self.range_rings.append(
-                    {
-                        "id": id,
-                        "name": range_ring["name"],
-                        "range": range_ring["radius"]*1000,
-                        "max_altitude": range_ring["max_altitude"]*1000
-                    }
+                    RangeRing(
+                        id=id,
+                        name=str(range_ring["name"]).replace("_", "-"),
+                        range=int(range_ring["radius"]*1000),
+                        max_altitude=int(range_ring["max_altitude"]*1000)
+                    )
                 )
         except KeyError as e:
             logging.error("Invalid key in range rings: "+str(e))
@@ -136,26 +155,30 @@ class Notifier:
             distance: float,
             altitude: float,
             ring_prefix: str = ""
-        ) -> Dict[str, Any] | None:
+        ) -> RangeRing | None:
         """Internal function to check for range ring hits for a specified sonde"""
 
         for ring in self.range_rings:
             # Skip already triggered rings
-            if ring_prefix+"range_ring_"+str(ring["id"]) in self.notified_sondes[serial]:
+            if ring.as_string("id", ring_prefix) in self.notified_sondes[serial]:
                 continue
 
             # Check if ring should be triggered
-            if (int(distance) <= ring["range"]) and (int(altitude) <= ring["max_altitude"]):
+            if (int(distance) <= ring.range) and (int(altitude) <= ring.max_altitude):
+                # Return ring with correct prefix
+                ring = copy.deepcopy(ring)
+                ring.prefix = ring_prefix
+
                 return ring # Only return ring with smallest radius (range_rings list is sorted by asc. radius)
 
         return None
     
-    def _set_ring_notified(self, serial: str, notified_ring_id: int, ring_prefix: str = ""):
+    def _set_ring_notified(self, serial: str, notified_ring: RangeRing):
         """Internal function to add a ring and all larger rings to the notified list of a sondes"""
 
         for ring in self.range_rings:
-            if ring["id"] >= notified_ring_id:
-                self.notified_sondes[serial].append(ring_prefix+"range_ring_"+str(ring["id"]))
+            if ring.id >= notified_ring.id:
+                self.notified_sondes[serial].append(ring.as_string("id", notified_ring.prefix))
 
     def _landing_prediction(
             self,
@@ -215,8 +238,8 @@ class Notifier:
 
                 triggered_ring = self._check_range_rings(serial, distance, altitude)
                 if triggered_ring is not None:
-                    self._notify("range_ring_"+triggered_ring["name"], serial, values[4], distance)
-                    self._set_ring_notified(serial, triggered_ring["id"])
+                    self._notify(triggered_ring.as_string("name"), serial, values[4], distance)
+                    self._set_ring_notified(serial, triggered_ring)
 
                 if self.prediction_enabled:
                     # Only run if 3 frames have been received yet
@@ -252,10 +275,10 @@ class Notifier:
                     ).m
 
                     # Check for range ring hits
-                    triggered_ring = self._check_range_rings(serial, prediction_distance, prediction["altitude"], "prediction_") # type: ignore
+                    triggered_ring = self._check_range_rings(serial, prediction_distance, prediction["altitude"], "prediction") # type: ignore
                     if triggered_ring is not None:
-                        self._notify("prediction_"+"range_ring_"+triggered_ring["name"], serial, values[4], prediction_distance)
-                        self._set_ring_notified(serial, triggered_ring["id"], "prediction_")
+                        self._notify(triggered_ring.as_string("name"), serial, values[4], prediction_distance)
+                        self._set_ring_notified(serial, triggered_ring)
 
     def run(self):
         """Run notifier"""
