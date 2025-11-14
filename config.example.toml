@@ -45,6 +45,16 @@ descent_rate = 10 # Descent rate in m/s for prediction
 
 
 # Notification services
+[email]
+enabled = false
+smtp_host = "smtp.example.com"
+smtp_port = 465
+smtp_auth = "ssl" # Options: none or ssl
+smtp_login = "myemail@example.com"
+smtp_password = "sup3r_s3cr3t_p4ssword"
+sender = "myemail@example.com"
+destinations = ["otheremail@example.com"]
+
 [ntfy]
 enabled = false
 topic_url = "https://ntfy.sh/..."

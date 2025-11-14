@@ -81,6 +81,9 @@ class Notifier:
         logging.debug("Initializing notification services")
         self.notification_services: List[NotificationService] = []
 
+        if config["email"]["enabled"]:
+            self.notification_services.append(EmailNotifier(config["email"]))
+
         if config["ntfy"]["enabled"]:
             self.notification_services.append(NtfyNotifier(config["ntfy"]))
 
@@ -89,6 +92,9 @@ class Notifier:
 
         if config["discord_webhook"]["enabled"]:
             self.notification_services.append(DiscordWebhookNotifier(config["discord_webhook"]))
+
+        if len(self.notification_services) == 0:
+            logging.warning("No notification services enabled")
 
     def _handle_packet(self, packet: Dict[str, Any]):
         """Internal callback function to handle payload summaries from AutoRX"""
@@ -272,6 +278,8 @@ class Notifier:
                     if self.only_predict_descending and (not is_descending):
                         logging.debug(f"Skipping prediction for sonde {serial} as it is not descending")
                         continue
+
+                    # TODO: only run prediction if there are still 
 
                     # Run prediction
                     now = datetime.now(timezone.utc)
