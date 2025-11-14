@@ -1,10 +1,9 @@
 import json
 import logging
-import queue
 import requests
 import time
 import traceback
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 from threading import Lock
 from typing import Any, Dict, List
@@ -28,7 +27,7 @@ class Notifier:
         self.prediction_enabled = config["prediction"]["enabled"]
         self.tawhiri_api_url = config["prediction"]["api_url"]
         
-        self.sondes_altitudes = defaultdict(lambda: queue.Queue(maxsize=5))
+        self.sondes_altitudes = defaultdict(lambda: deque(maxlen=5))
         self.sondes_altitudes_lock = Lock()
 
         self.tracked_sondes = {}
@@ -86,7 +85,7 @@ class Notifier:
             ]
 
         with self.sondes_altitudes_lock:
-            self.sondes_altitudes[serial].put(packet["altitude"])
+            self.sondes_altitudes[serial].append(packet["altitude"])
     
     def _purge_old_tracked(self):
         """Internal function to remove all old sondes from tracked_sondes dict"""
@@ -213,7 +212,7 @@ class Notifier:
 
                 if self.prediction_enabled:
                     # Only run if 3 frames have been received yet
-                    alts = list(self.sondes_altitudes[serial].queue)
+                    alts = self.sondes_altitudes[serial]
                     if len(alts) < 3:
                         logging.debug(f"Skipping prediciton for sonde {serial} because not enought frames have been received")
                         continue
@@ -228,6 +227,7 @@ class Notifier:
 
                     # If option to only predict for descending sondes is set and sonde is not descending, skip
                     if self.only_predict_descending and (not is_descending):
+                        logging.debug(f"Skipping prediction for sonde {serial} as it is not descending")
                         continue
 
                     # Run prediction
