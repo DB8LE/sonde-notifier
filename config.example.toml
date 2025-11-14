@@ -18,6 +18,16 @@ longitude = 0.0 # Longitude of your receiver
 [notifier]
 check_interval = 5 # Interval in minutes between checks if notifications should be sent
 
+# Define as many range rings as you'd like
+range_rings = [
+    # Radius and maximum altitude are in kilometers
+    # If a range ring gets triggerd by a sonde, all range rings below it in this list
+    # will also be counted as triggered, so order them so that the largest ones are at the bottom
+    # and the smallest ones at the top of the list.
+    { name = "inner", radius = 10, max_altitude = 3 },
+    { name = "outer", radius = 50, max_altitude = 8 }
+]
+
 [prediction]
 enabled = true
 api_url = "https://api.v2.sondehub.org/tawhiri" # URL to the prediction API.
@@ -30,15 +40,6 @@ only_predict_descending = true # Only run prediction for sondes that are descend
 ascent_rate = 5 # Ascent rate in m/s for prediction
 burst_altitude = 30 # Burst altitude in km for prediction
 descent_rate = 10 # Descent rate in m/s for prediction
-
-# Define as many range rings as you'd like
-[range_ring_1]
-radius = 10 # Radius in kilometers
-max_altitude = 3 # Maximum altitude of the sonde in kilometers
-
-[range_ring_2]
-radius = 50 # Radius in kilometers
-max_altitude = 8 # Maximum altitude of the sonde in kilometers
 
 
 # Notification services

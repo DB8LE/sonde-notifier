@@ -25,9 +25,9 @@ class NtfyNotifier(NotificationService):
 
     def notify(self, notification_type: str, serial: str, sonde_type: str, distance: float) -> None:
         if notification_type.startswith("range_ring_"):
-            notification_string = f"An {sonde_type} sonde has triggered range ring {notification_type[-1:]}. (Serial: {serial})"
+            notification_string = f"An {sonde_type} sonde has triggered range ring {notification_type.split("_")[-1]}. (Serial: {serial})"
         elif notification_type.startswith("prediction_range_ring_"):
-            notification_string = f"A landing prediction for an {sonde_type} sonde has triggered range ring {notification_type[-1:]}. (Serial: {serial})"
+            notification_string = f"A landing prediction for an {sonde_type} sonde has triggered range ring {notification_type.split("_")[-1]}. (Serial: {serial})"
         else:
             notification_string = "ERROR" # Not reachable ATM
 

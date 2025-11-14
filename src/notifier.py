@@ -20,13 +20,13 @@ class Notifier:
         logging.info("Initializing notifier")
 
         self.config = config
-        self.notify_check_interval = config["notifier"]["check_interval"]*60
+        self.notify_check_interval = config["notifier"]["check_interval"] * 60 # Convert to seconds
         self.only_predict_descending = config["prediction"]["only_predict_descending"]
         self.station_position = (config["station"]["latitude"], config["station"]["longitude"])
 
         self.prediction_enabled = config["prediction"]["enabled"]
         self.tawhiri_api_url = config["prediction"]["api_url"]
-        
+
         self.sondes_altitudes = defaultdict(lambda: deque(maxlen=5))
         self.sondes_altitudes_lock = Lock()
 
@@ -37,15 +37,20 @@ class Notifier:
         self.notified_sondes_lock = Lock()
 
         # Parse range rings
-        self.range_rings = {}
-        for key, value in config.items():
-            if key.startswith("range_ring_"):
-                self.range_rings[key] = (
-                    value["radius"]*1000,
-                    value["max_altitude"]*1000
+        self.range_rings = []
+        try:
+            for id, range_ring in enumerate(config["notifier"]["range_rings"]):
+                self.range_rings.append(
+                    {
+                        "id": id,
+                        "name": range_ring["name"],
+                        "range": range_ring["radius"]*1000,
+                        "max_altitude": range_ring["max_altitude"]*1000
+                    }
                 )
-        sorted_rings_items = sorted(self.range_rings.items(), key=lambda item: item[1][0])
-        self.range_rings = {k: v for k, v in sorted_rings_items}
+        except KeyError as e:
+            logging.error("Invalid key in range rings: "+str(e))
+            exit(1)
 
         if len(self.range_rings) == 0:
             logging.error("Define at least one range ring!")
@@ -125,49 +130,52 @@ class Notifier:
         for service in self.notification_services:
             service.notify(notification_type, serial, sonde_type, distance)
 
-    def _check_range_rings(self, serial: str, distance: float, altitude: float, ring_prefix: str = "") -> str | None:
+    def _check_range_rings(
+            self,
+            serial: str,
+            distance: float,
+            altitude: float,
+            ring_prefix: str = ""
+        ) -> Dict[str, Any] | None:
         """Internal function to check for range ring hits for a specified sonde"""
 
-        # Check range rings
-        for ring, filters in self.range_rings.items():
+        for ring in self.range_rings:
             # Skip already triggered rings
-            if ring_prefix+ring in self.notified_sondes[serial]:
+            if ring_prefix+"range_ring_"+str(ring["id"]) in self.notified_sondes[serial]:
                 continue
 
             # Check if ring should be triggered
-            if (int(distance) <= filters[0]) and (int(altitude) <= filters[1]):
+            if (int(distance) <= ring["range"]) and (int(altitude) <= ring["max_altitude"]):
                 return ring # Only return ring with smallest radius (range_rings list is sorted by asc. radius)
 
         return None
     
-    def _set_ring_notified(self, serial: str, ring: str, ring_prefix: str = ""):
+    def _set_ring_notified(self, serial: str, notified_ring_id: int, ring_prefix: str = ""):
         """Internal function to add a ring and all larger rings to the notified list of a sondes"""
 
-        current_ring_id = int(ring[-1:])
-        for block_ring in self.range_rings.keys():
-            block_ring_id = int(block_ring[-1:])
-            if block_ring_id >= current_ring_id:
-                self.notified_sondes[serial].append(ring_prefix+block_ring)
+        for ring in self.range_rings:
+            if ring["id"] >= notified_ring_id:
+                self.notified_sondes[serial].append(ring_prefix+"range_ring_"+str(ring["id"]))
 
-    def _landing_prediction(self,
-                            time: datetime,
-                            latitude: float,
-                            longitude: float,
-                            altitude: float,
-                            descending: bool
-                            ) -> Dict[str, float | datetime] | None:
+    def _landing_prediction(
+            self,
+            start_time: datetime,
+            latitude: float,
+            longitude: float,
+            altitude: float,
+            descending: bool
+        ) -> Dict[str, float | datetime] | None:
         """Internal function to predict the landing position of a sonde"""
 
         altitude = int(altitude)
-        logging.debug(f"Running prediction for {latitude}, {longitude}, {altitude}m {'descending' if descending else 'rising'}")
+        time_formatted = start_time.isoformat().split("+")[0]
+        logging.debug(f"Running prediction for {latitude}, {longitude}, {altitude}m {'descending' if descending else 'rising'} at {time_formatted}")
 
         # If sonde is descending, set burst point to altitude to skip ascent
         if descending:
             burst_altitude = altitude+0.1
         else:
             burst_altitude = self.config["prediction"]["burst_altitude"]
-
-        time_formatted = time.isoformat().split("+")[0]
 
         # Add URL parameters
         url = self.tawhiri_api_url+f"?launch_latitude={latitude}" \
@@ -207,8 +215,8 @@ class Notifier:
 
                 triggered_ring = self._check_range_rings(serial, distance, altitude)
                 if triggered_ring is not None:
-                    self._notify(triggered_ring, serial, values[4], distance)
-                    self._set_ring_notified(serial, triggered_ring)
+                    self._notify("range_ring_"+triggered_ring["name"], serial, values[4], distance)
+                    self._set_ring_notified(serial, triggered_ring["id"])
 
                 if self.prediction_enabled:
                     # Only run if 3 frames have been received yet
@@ -218,7 +226,7 @@ class Notifier:
                         continue
 
                     # Only run if a packet has been received since the last notification check cycle
-                    if round(time.time()-values[0]) > self.notify_check_interval:
+                    if round(time.time() - values[0]) > self.notify_check_interval:
                         logging.debug(f"Skipping prediciton for sonde {serial} as last receive was too long ago")
                         continue
 
@@ -246,8 +254,8 @@ class Notifier:
                     # Check for range ring hits
                     triggered_ring = self._check_range_rings(serial, prediction_distance, prediction["altitude"], "prediction_") # type: ignore
                     if triggered_ring is not None:
-                        self._notify("prediction_"+triggered_ring, serial, values[4], prediction_distance)
-                        self._set_ring_notified(serial, triggered_ring, "prediction_")
+                        self._notify("prediction_"+"range_ring_"+triggered_ring["name"], serial, values[4], prediction_distance)
+                        self._set_ring_notified(serial, triggered_ring["id"], "prediction_")
 
     def run(self):
         """Run notifier"""
