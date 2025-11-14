@@ -44,6 +44,8 @@ class Notifier:
         self.station_position = (config["station"]["latitude"], config["station"]["longitude"])
 
         self.prediction_enabled = config["prediction"]["enabled"]
+        self.prediction_min_cycles = config["prediction"]["prediction_cycles"]
+        self.notification_check_cycles = 1
         self.tawhiri_api_url = config["prediction"]["api_url"]
 
         self.sondes_altitudes = defaultdict(lambda: deque(maxlen=5))
@@ -227,6 +229,16 @@ class Notifier:
 
         logging.debug("Checking notifications")
 
+        # Check if enough notification check cycles have been completed to run a prediction
+        run_prediction = False
+        if self.prediction_enabled:
+            if self.notification_check_cycles < self.prediction_min_cycles:
+                status = f"{self.notification_check_cycles}/{self.prediction_min_cycles}"
+                logging.debug(status+" check cycles for prediction")
+            else:
+                self.notification_check_cycles = 0
+                run_prediction = True
+
         with self.tracked_sondes_lock and self.notified_sondes_lock and self.sondes_altitudes_lock:
             for serial, values in self.tracked_sondes.items():
                 # Calculate distance to sonde
@@ -241,8 +253,8 @@ class Notifier:
                     self._notify(triggered_ring.as_string("name"), serial, values[4], distance)
                     self._set_ring_notified(serial, triggered_ring)
 
-                if self.prediction_enabled:
-                    # Only run if 3 frames have been received yet
+                if run_prediction:
+                    # Only run if 3 frames have been received already
                     alts = self.sondes_altitudes[serial]
                     if len(alts) < 3:
                         logging.debug(f"Skipping prediciton for sonde {serial} because not enought frames have been received")
@@ -279,6 +291,8 @@ class Notifier:
                     if triggered_ring is not None:
                         self._notify(triggered_ring.as_string("name"), serial, values[4], prediction_distance)
                         self._set_ring_notified(serial, triggered_ring)
+
+        self.notification_check_cycles += 1
 
     def run(self):
         """Run notifier"""

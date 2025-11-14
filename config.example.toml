@@ -16,7 +16,7 @@ latitude = 0.0 # Latitude of your receiver
 longitude = 0.0 # Longitude of your receiver
 
 [notifier]
-check_interval = 5 # Interval in minutes between checks if notifications should be sent
+check_interval = 1 # Interval in minutes between checks if notifications should be sent
 
 # Define as many range rings as you'd like
 range_rings = [
@@ -30,6 +30,8 @@ range_rings = [
 
 [prediction]
 enabled = true
+prediction_cycles = 15 # How many times the notifier check interval needs to be completed to run a prediction
+                       # (Every Nth run of the notification check will try to run a prediction)
 api_url = "https://api.v2.sondehub.org/tawhiri" # URL to the prediction API.
                                                 # I highly recommend self-hosting this,
                                                 # to prevent leeching off of sondehubs resources.
