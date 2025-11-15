@@ -7,7 +7,7 @@ import traceback
 from collections import defaultdict, deque
 from datetime import datetime, timezone
 from threading import Lock
-from typing import Any, Dict, List, Literal
+from typing import Any, Dict, List, Literal, Optional, Self, Tuple
 
 import geopy.distance
 
@@ -34,6 +34,50 @@ class RangeRing:
 
         return f"{prefix}range_ring_{suffix}"
 
+class SondeFrame:
+    def __init__(
+            self,
+            serial: str,
+            frame_num: int,
+            latitude: float,
+            longitude: float,
+            altitude: int,
+            model: str,
+            rx_time: Optional[datetime] = None,
+        ) -> None:
+        self.serial = serial
+        self.frame = frame_num
+        self.latitude = latitude
+        self.longitude = longitude
+        self.altitude = altitude
+        self.model = model
+        self.time = rx_time
+
+    def calculate_distance(self, observer: Tuple[float, float]) -> float:
+        """
+        Calculate distance from a certain observer point (lat, lon) to the sondeh.
+        Returns distance in meters.
+        """
+    
+        return geopy.distance.geodesic(
+            observer,
+            (self.latitude, self.longitude)
+        ).m
+
+    @classmethod
+    def from_autorx(cls, payload_summary: Dict[str, Any]) -> Self:
+        """Initialize a SondeFrame from an AutoRX UDP payload summary"""
+
+        return cls(
+            serial=payload_summary["callsign"],
+            frame_num=payload_summary["frame"],
+            latitude=payload_summary["latitude"],
+            longitude=payload_summary["longitude"],
+            altitude=payload_summary["altitude"],
+            model=payload_summary["model"]
+            # Can't set RX time from the payload summary due to leap seconds and missing date
+        )
+
 class Notifier:
     def __init__(self, config: Dict[str, Any]) -> None:
         logging.info("Initializing notifier")
@@ -51,7 +95,7 @@ class Notifier:
         self.sondes_altitudes = defaultdict(lambda: deque(maxlen=5))
         self.sondes_altitudes_lock = Lock()
 
-        self.tracked_sondes = {}
+        self.tracked_sondes: Dict[str, SondeFrame] = {}
         self.tracked_sondes_lock = Lock()
 
         self.notified_sondes = defaultdict(list)
@@ -99,25 +143,22 @@ class Notifier:
     def _handle_packet(self, packet: Dict[str, Any]):
         """Internal callback function to handle payload summaries from AutoRX"""
 
-        logging.debug(f"Got packet #{packet['frame']} from sonde {packet['callsign']}")
+        # Parse payload summary and set time
+        sonde_frame = SondeFrame.from_autorx(packet)
+        sonde_frame.time = datetime.now(timezone.utc)
+
+        logging.debug(f"Got packet #{sonde_frame.frame} from sonde {sonde_frame.serial}")
 
         # Update internal list
-        serial = packet["callsign"]
         with self.tracked_sondes_lock:
             # Log message if sonde is new
-            if serial not in self.tracked_sondes:
-                logging.info(f"Got new {packet['model']} sonde: {serial}")
+            if sonde_frame.serial not in self.tracked_sondes:
+                logging.info(f"Got new {sonde_frame.model} sonde: {sonde_frame.serial}")
 
-            self.tracked_sondes[serial] = [
-                time.time(),
-                packet["latitude"],
-                packet["longitude"],
-                packet["altitude"],
-                packet["model"]
-            ]
+            self.tracked_sondes[sonde_frame.serial] = sonde_frame
 
         with self.sondes_altitudes_lock:
-            self.sondes_altitudes[serial].append(packet["altitude"])
+            self.sondes_altitudes[sonde_frame.serial].append(sonde_frame.altitude)
     
     def _purge_old_tracked(self):
         """Internal function to remove all old sondes from tracked_sondes dict"""
@@ -127,8 +168,10 @@ class Notifier:
         remove = []
         with self.tracked_sondes_lock:
             # Check which sondes are old
-            for serial, values in self.tracked_sondes.items():
-                if time.time()-values[0] >= TRACKED_SONDES_MAX_SECONDS:
+            for serial, frame in self.tracked_sondes.items():
+                assert frame.time is not None # impossible, just to make typechecker happy
+                frame_age = (datetime.now(timezone.utc) - frame.time).total_seconds()
+                if frame_age >= TRACKED_SONDES_MAX_SECONDS:
                     remove.append(serial)
 
             # Remove old sondes
@@ -246,17 +289,13 @@ class Notifier:
                 run_prediction = True
 
         with self.tracked_sondes_lock and self.notified_sondes_lock and self.sondes_altitudes_lock:
-            for serial, values in self.tracked_sondes.items():
+            for serial, frame in self.tracked_sondes.items():
                 # Calculate distance to sonde
-                distance = geopy.distance.geodesic(
-                    self.station_position,
-                    (values[1], values[2])
-                ).m
-                altitude = values[3]
+                sonde_distance = frame.calculate_distance(self.station_position)
 
-                triggered_ring = self._check_range_rings(serial, distance, altitude)
+                triggered_ring = self._check_range_rings(serial, sonde_distance, frame.altitude)
                 if triggered_ring is not None:
-                    self._notify(triggered_ring.as_string("name"), serial, values[4], distance)
+                    self._notify(triggered_ring.as_string("name"), serial, frame.model, sonde_distance)
                     self._set_ring_notified(serial, triggered_ring)
 
                 if run_prediction:
@@ -267,7 +306,9 @@ class Notifier:
                         continue
 
                     # Only run if a packet has been received since the last notification check cycle
-                    if round(time.time() - values[0]) > self.notify_check_interval:
+                    assert frame.time is not None # impossible, just to make typechecker happy
+                    frame_age = (datetime.now(timezone.utc) - frame.time).total_seconds()
+                    if round(frame_age) > self.notify_check_interval:
                         logging.debug(f"Skipping prediciton for sonde {serial} as last receive was too long ago")
                         continue
 
@@ -279,17 +320,23 @@ class Notifier:
                         logging.debug(f"Skipping prediction for sonde {serial} as it is not descending")
                         continue
 
-                    # TODO: only run prediction if there are still 
+                    # TODO: only run prediction if there are still notifications left for this sonde (?)
 
                     # Run prediction
                     now = datetime.now(timezone.utc)
-                    prediction = self._landing_prediction(now, values[1], values[2], values[3], is_descending)
+                    prediction = self._landing_prediction(
+                        now,
+                        frame.latitude,
+                        frame.longitude,
+                        frame.altitude,
+                        is_descending
+                    )
 
                     if prediction is None: # Error while predicting, skip
                         continue
 
                     # Calculate distance
-                    prediction_distance = distance = geopy.distance.geodesic(
+                    prediction_distance = geopy.distance.geodesic(
                         self.station_position,
                         (prediction["latitude"], prediction["longitude"])
                     ).m
@@ -297,7 +344,7 @@ class Notifier:
                     # Check for range ring hits
                     triggered_ring = self._check_range_rings(serial, prediction_distance, prediction["altitude"], "prediction") # type: ignore
                     if triggered_ring is not None:
-                        self._notify(triggered_ring.as_string("name"), serial, values[4], prediction_distance)
+                        self._notify(triggered_ring.as_string("name"), serial, frame.model, prediction_distance)
                         self._set_ring_notified(serial, triggered_ring)
 
         self.notification_check_cycles += 1
