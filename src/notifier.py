@@ -1,7 +1,5 @@
 import copy
-import json
 import logging
-import requests
 import time
 import traceback
 from collections import defaultdict, deque
@@ -11,7 +9,7 @@ from typing import Any, Dict, List, Literal, Optional, Self, Tuple
 
 import geopy.distance
 
-from . import autorx
+from . import autorx, prediction
 from .notification_services import *
 
 TRACKED_SONDES_MAX_SECONDS = 5*60*60
@@ -87,10 +85,9 @@ class Notifier:
         self.only_predict_descending = config["prediction"]["only_predict_descending"]
         self.station_position = (config["station"]["latitude"], config["station"]["longitude"])
 
-        self.prediction_enabled = config["prediction"]["enabled"]
+        self.prediction_engine = None
         self.prediction_min_cycles = config["prediction"]["prediction_cycles"]
         self.notification_check_cycles = 1
-        self.tawhiri_api_url = config["prediction"]["api_url"]
 
         self.sondes_altitudes = defaultdict(lambda: deque(maxlen=5))
         self.sondes_altitudes_lock = Lock()
@@ -100,6 +97,15 @@ class Notifier:
 
         self.notified_sondes = defaultdict(list)
         self.notified_sondes_lock = Lock()
+
+        # Set prediction engine
+        if config["prediction"]["enabled"]:
+            self.prediction_engine = prediction.PredictionEngine(
+                config["prediction"]["api_url"],
+                config["prediction"]["ascent_rate"],
+                config["prediction"]["burst_altitude"],
+                config["prediction"]["descent_rate"]
+            )
 
         # Parse range rings
         self.range_rings: List[RangeRing] = []
@@ -231,48 +237,6 @@ class Notifier:
             if ring.id >= notified_ring.id:
                 self.notified_sondes[serial].append(ring.as_string("id", notified_ring.prefix))
 
-    def _landing_prediction(
-            self,
-            start_time: datetime,
-            latitude: float,
-            longitude: float,
-            altitude: float,
-            descending: bool
-        ) -> Dict[str, float | datetime] | None:
-        """Internal function to predict the landing position of a sonde"""
-
-        altitude = int(altitude)
-        time_formatted = start_time.isoformat().split("+")[0]
-        logging.debug(f"Running prediction for {latitude}, {longitude}, {altitude}m {'descending' if descending else 'rising'} at {time_formatted}")
-
-        # If sonde is descending, set burst point to altitude to skip ascent
-        if descending:
-            burst_altitude = altitude+0.1
-        else:
-            burst_altitude = self.config["prediction"]["burst_altitude"]
-
-        # Add URL parameters
-        url = self.tawhiri_api_url+f"?launch_latitude={latitude}" \
-                                   f"&launch_longitude={longitude}" \
-                                   f"&launch_altitude={altitude}" \
-                                   f"&launch_datetime={time_formatted}Z" \
-                                   f"&ascent_rate={self.config['prediction']['ascent_rate']}" \
-                                   f"&burst_altitude={burst_altitude}" \
-                                   f"&descent_rate={self.config['prediction']['descent_rate']}"
-
-        # Make request and load response json
-        request = requests.get(url)
-
-        if request.status_code != 200:
-            logging.error(f"Tawhiri prediction API returned status code {request.status_code}: {request.text}")
-            return None
-
-        prediction = json.loads(request.content)
-        landing = prediction["prediction"][1]["trajectory"][-1]
-        landing["datetime"] = datetime.fromisoformat(landing["datetime"])
-
-        return landing
-
     def _check_notifications(self):
         """Internal function to check if notifications need to be sent"""
 
@@ -280,7 +244,7 @@ class Notifier:
 
         # Check if enough notification check cycles have been completed to run a prediction
         run_prediction = False
-        if self.prediction_enabled:
+        if self.prediction_engine is not None:
             if self.notification_check_cycles < self.prediction_min_cycles:
                 status = f"{self.notification_check_cycles}/{self.prediction_min_cycles}"
                 logging.debug(status+" check cycles for prediction")
@@ -299,6 +263,8 @@ class Notifier:
                     self._set_ring_notified(serial, triggered_ring)
 
                 if run_prediction:
+                    assert self.prediction_engine is not None # impossible, just to make typechecker happy
+
                     # Only run if 3 frames have been received already
                     alts = self.sondes_altitudes[serial]
                     if len(alts) < 3:
@@ -324,7 +290,7 @@ class Notifier:
 
                     # Run prediction
                     now = datetime.now(timezone.utc)
-                    prediction = self._landing_prediction(
+                    landing_prediction = self.prediction_engine.run_landing_prediction(
                         now,
                         frame.latitude,
                         frame.longitude,
@@ -332,17 +298,15 @@ class Notifier:
                         is_descending
                     )
 
-                    if prediction is None: # Error while predicting, skip
+                    if landing_prediction is None: # Error while predicting, skip
+                        logging.warning(f"Prediction for sonde {serial} failed due to error while ")
                         continue
 
                     # Calculate distance
-                    prediction_distance = geopy.distance.geodesic(
-                        self.station_position,
-                        (prediction["latitude"], prediction["longitude"])
-                    ).m
+                    prediction_distance = landing_prediction.calculate_distance(self.station_position)
 
                     # Check for range ring hits
-                    triggered_ring = self._check_range_rings(serial, prediction_distance, prediction["altitude"], "prediction") # type: ignore
+                    triggered_ring = self._check_range_rings(serial, prediction_distance, landing_prediction.altitude, "prediction")
                     if triggered_ring is not None:
                         self._notify(triggered_ring.as_string("name"), serial, frame.model, prediction_distance)
                         self._set_ring_notified(serial, triggered_ring)
