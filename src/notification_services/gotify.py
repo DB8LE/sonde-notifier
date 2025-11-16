@@ -3,6 +3,9 @@ from urllib.parse import urljoin
 
 import requests
 
+from ..notifier import RangeRing, SondeFrame
+from ..prediction import LandingPrediction
+
 from .notification_service import NotificationService
 
 
@@ -10,19 +13,32 @@ class GotifyNotifier(NotificationService):
     def __init__(self, config: Dict[str, Any]) -> None:
         self.url = urljoin(config["url"], f"/message?{config['app_token']}")
 
-    def notify(self, notification_type: str, serial: str, sonde_type: str, distance: float) -> None:
-        title = "Sonde Notifier"
-        if notification_type.startswith("range_ring_"):
-            text = f"An {sonde_type} sonde has triggered range ring {notification_type.split('_')[-1]}. (Serial: {serial})"
-        elif notification_type.startswith("prediction_range_ring_"):
-            text = f"A landing prediction for an {sonde_type} sonde has triggered range ring {notification_type.split('_')[-1]}. (Serial: {serial})"
-        else:  # Not reachable ATM
-            text = "ERROR"
-
+    def _send_notification(self, title: str, message: str) -> None:
         requests.post(
             self.url,
             files={
                 "title": title,
-                "message": text
+                "message": message
             }
-        )    
+        )
+
+    def notify_rangering(
+            self,
+            latest_frame: SondeFrame,
+            triggered_ring: RangeRing,
+            distance: float # meters
+        ) -> None:
+        notification_text = f"An {latest_frame.model} sonde has triggered range ring {triggered_ring.name}. (Serial: {latest_frame.serial})"
+
+        self._send_notification("Sonde Notification", notification_text)
+
+    def notify_rangering_prediction(
+            self,
+            latest_frame: SondeFrame,
+            landing_prediction: LandingPrediction,
+            triggered_ring: RangeRing,
+            prediction_distance: float # meters
+        ) -> None:
+        notification_text = f"A landing prediction for an {latest_frame.model} sonde has triggered range ring {triggered_ring.name}. (Serial: {latest_frame.serial})"
+        
+        self._send_notification("Sonde Prediction Notification", notification_text)

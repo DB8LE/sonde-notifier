@@ -3,7 +3,8 @@ import smtplib
 import ssl
 from typing import Any, Dict
 
-import requests
+from ..notifier import RangeRing, SondeFrame
+from ..prediction import LandingPrediction
 
 from .notification_service import NotificationService
 
@@ -23,19 +24,8 @@ class EmailNotifier(NotificationService):
             logging.error(f"Invalid SMTP authentication option '{self.smtp_auth}'")
             exit(1)
 
-    def notify(self, notification_type: str, serial: str, sonde_type: str, distance: float) -> None:
-        # Prepare email title and content
-        if notification_type.startswith("range_ring_"):
-            title = f"{sonde_type} sonde triggered range ring {notification_type.split('_')[-1]}"
-            content = f"Serial: {serial}\nDistance: {distance}km\nhttps://sondehub.org/{serial}"
-        elif notification_type.startswith("prediction_range_ring_"):
-            title = f"{sonde_type} sonde prediction triggered range ring {notification_type.split('_')[-1]}"
-            content = f"Serial: {serial}\nDistance: {distance}km\nhttps://sondehub.org/{serial}"
-        else:
-            title = "ERROR" # Not reachable ATM
-            content = ""
-
-        # Connect to server
+    def _send_notification(self, title: str, content: str) -> None:
+        # Connect to server unencrypted to with SSL
         ssl_context = None
         if self.smtp_auth == "ssl":
             ssl_context = ssl.create_default_context()
@@ -43,6 +33,7 @@ class EmailNotifier(NotificationService):
         else:
             server = smtplib.SMTP(self.smtp_host, self.smtp_port)
         
+        # Log in and send emails
         try:
             server.login(self.smtp_login, self.smtp_password)
             
@@ -51,3 +42,27 @@ class EmailNotifier(NotificationService):
                 server.sendmail(self.sender, destination, "Subject: "+title+"\n\n"+content) 
         except Exception as e:
             logging.error("Encountered exception while connected to SMTP server: "+str(e))
+
+    def notify_rangering(
+            self,
+            latest_frame: SondeFrame,
+            triggered_ring: RangeRing,
+            distance: float # meters
+        ) -> None:
+        title = f"{latest_frame.model} sonde triggered range ring {triggered_ring.name}"
+        content = f"Serial: {latest_frame.serial}\nDistance: {distance}km\nhttps://sondehub.org/{latest_frame.serial}"
+
+        self._send_notification(title, content)
+
+    def notify_rangering_prediction(
+            self,
+            latest_frame: SondeFrame,
+            landing_prediction: LandingPrediction,
+            triggered_ring: RangeRing,
+            prediction_distance: float # meters
+        ) -> None:
+        title = f"{latest_frame.model} sonde prediction triggered range ring {triggered_ring.name}"
+        content = f"Serial: {latest_frame.serial}\nDistance: {prediction_distance}km\nhttps://sondehub.org/{latest_frame.serial}"
+
+        self._send_notification(title, content)
+

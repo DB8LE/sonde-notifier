@@ -10,7 +10,6 @@ from typing import Any, Dict, List, Literal, Optional, Self, Tuple
 import geopy.distance
 
 from . import autorx, prediction
-from .notification_services import *
 
 TRACKED_SONDES_MAX_SECONDS = 5*60*60
 
@@ -129,18 +128,23 @@ class Notifier:
 
         # Prepare list of notification services from config
         logging.debug("Initializing notification services")
+        from .notification_services import NotificationService
         self.notification_services: List[NotificationService] = []
 
         if config["email"]["enabled"]:
+            from .notification_services import EmailNotifier
             self.notification_services.append(EmailNotifier(config["email"]))
 
         if config["ntfy"]["enabled"]:
+            from .notification_services import NtfyNotifier
             self.notification_services.append(NtfyNotifier(config["ntfy"]))
 
         if config["gotify"]["enabled"]:
+            from .notification_services import GotifyNotifier
             self.notification_services.append(GotifyNotifier(config["gotify"]))
 
         if config["discord_webhook"]["enabled"]:
+            from .notification_services import DiscordWebhookNotifier
             self.notification_services.append(DiscordWebhookNotifier(config["discord_webhook"]))
 
         if len(self.notification_services) == 0:
@@ -198,13 +202,32 @@ class Notifier:
                 for serial in remove:
                     logging.info("Removed old sonde from tracked list: "+str(serial))
 
-    def _notify(self, notification_type: str, serial: str, sonde_type: str, distance: float):
-        """Internal function to send notifications for a specific sonde"""
+    def _notify_rangering(
+            self,
+            latest_frame: SondeFrame,
+            triggered_ring: RangeRing,
+            distance: float
+        ):
+        """Internal function to send range ring notifications for a specific sonde"""
 
-        logging.info(f"Sending notifications for {notification_type} of sonde {serial} ({sonde_type})")
+        logging.info(f"Sending notifications for sonde {latest_frame.serial} triggering range ring {triggered_ring.name}")
 
         for service in self.notification_services:
-            service.notify(notification_type, serial, sonde_type, distance)
+            service.notify_rangering(latest_frame, triggered_ring, distance)
+
+    def _notify_rangering_prediction(
+            self,
+            latest_frame: SondeFrame,
+            landing_prediction: prediction.LandingPrediction,
+            triggered_ring: RangeRing,
+            prediction_distance: float
+        ):
+        """Internal function to send range ring notifications for a specific sonde"""
+
+        logging.info(f"Sending notifications for prediction of sonde {latest_frame.serial} triggering range ring {triggered_ring.name}")
+
+        for service in self.notification_services:
+            service.notify_rangering_prediction(latest_frame, landing_prediction, triggered_ring, prediction_distance)
 
     def _check_range_rings(
             self,
@@ -259,7 +282,7 @@ class Notifier:
 
                 triggered_ring = self._check_range_rings(serial, sonde_distance, frame.altitude)
                 if triggered_ring is not None:
-                    self._notify(triggered_ring.as_string("name"), serial, frame.model, sonde_distance)
+                    self._notify_rangering(frame, triggered_ring, sonde_distance)
                     self._set_ring_notified(serial, triggered_ring)
 
                 if run_prediction:
@@ -308,7 +331,7 @@ class Notifier:
                     # Check for range ring hits
                     triggered_ring = self._check_range_rings(serial, prediction_distance, landing_prediction.altitude, "prediction")
                     if triggered_ring is not None:
-                        self._notify(triggered_ring.as_string("name"), serial, frame.model, prediction_distance)
+                        self._notify_rangering_prediction(frame, landing_prediction, triggered_ring, prediction_distance)
                         self._set_ring_notified(serial, triggered_ring)
 
         self.notification_check_cycles += 1

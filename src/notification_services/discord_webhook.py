@@ -2,6 +2,9 @@ from typing import Any, Dict
 
 import requests
 
+from ..notifier import RangeRing, SondeFrame
+from ..prediction import LandingPrediction
+
 from .notification_service import NotificationService
 
 
@@ -10,14 +13,7 @@ class DiscordWebhookNotifier(NotificationService):
         self.url = config["url"]
         self.mentions = config["mentions"]
 
-    def notify(self, notification_type: str, serial: str, sonde_type: str, distance: float) -> None:
-        if notification_type.startswith("range_ring_"):
-            text = f"An {sonde_type} sonde has triggered range ring {notification_type.split('_')[-1]}. (Serial: {serial})"
-        elif notification_type.startswith("prediction_range_ring_"):
-            text = f"A landing prediction for an {sonde_type} sonde has triggered range ring {notification_type.split('_')[-1]}. (Serial: {serial})"
-        else:  # Not reachable ATM
-            text = "ERROR"
-
+    def _send_notification(self, text: str) -> None:
         text = text + "\n" + self.mentions
 
         requests.post(
@@ -25,4 +21,25 @@ class DiscordWebhookNotifier(NotificationService):
             json={
                 "content": text
             }
-        )    
+        )
+
+    def notify_rangering(
+            self,
+            latest_frame: SondeFrame,
+            triggered_ring: RangeRing,
+            distance: float # meters
+        ) -> None:
+        notification_text = f"An {latest_frame.model} sonde has triggered range ring {triggered_ring.name}. (Serial: {latest_frame.serial})"
+
+        self._send_notification(notification_text)
+
+    def notify_rangering_prediction(
+            self,
+            latest_frame: SondeFrame,
+            landing_prediction: LandingPrediction,
+            triggered_ring: RangeRing,
+            prediction_distance: float # meters
+        ) -> None:
+        notification_text = f"A landing prediction for an {latest_frame.model} sonde has triggered range ring {triggered_ring.name}. (Serial: {latest_frame.serial})"
+        
+        self._send_notification(notification_text)
