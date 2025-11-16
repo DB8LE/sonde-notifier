@@ -26,12 +26,18 @@ class NtfyNotifier(NotificationService):
             auth_str = user+":"+password
             self.auth_header = "Basic "+base64.b64encode(auth_str.encode("ascii")).decode("ascii")
 
-    def _send_notification(self, text: str) -> None:
+    def _send_notification(self, text: str, sonde_serial: str = "") -> None:
+        # Prepare action header text
+        action_header = ""
+        if sonde_serial != "":
+            action_header = "view, View on Sondehub, https://sondehub.org/"+sonde_serial
+            print(action_header)
+
         # Send request
         request = requests.post(
             self.topic_url,
             data=text.encode(),
-            headers={"Authorization": self.auth_header}
+            headers={"Authorization": self.auth_header, "Actions": action_header}
         )
 
         # Check status code
@@ -48,7 +54,7 @@ class NtfyNotifier(NotificationService):
         ) -> None:
         notification_text = f"An {latest_frame.model} sonde has triggered range ring {triggered_ring.name}. (Serial: {latest_frame.serial})"
 
-        self._send_notification(notification_text)
+        self._send_notification(notification_text, latest_frame.serial)
 
     def notify_rangering_prediction(
             self,
@@ -59,5 +65,5 @@ class NtfyNotifier(NotificationService):
         ) -> None:
         notification_text = f"A landing prediction for an {latest_frame.model} sonde has triggered range ring {triggered_ring.name}. (Serial: {latest_frame.serial})"
         
-        self._send_notification(notification_text)
+        self._send_notification(notification_text, latest_frame.serial)
 
