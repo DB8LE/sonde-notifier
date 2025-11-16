@@ -7,8 +7,6 @@ from datetime import datetime, timezone
 from threading import Lock
 from typing import Any, Dict, List, Literal, Optional, Self, Tuple
 
-import geopy.distance
-
 from . import autorx, prediction
 
 TRACKED_SONDES_MAX_SECONDS = 5*60*60
@@ -31,50 +29,6 @@ class RangeRing:
 
         return f"{prefix}range_ring_{suffix}"
 
-class SondeFrame:
-    def __init__(
-            self,
-            serial: str,
-            frame_num: int,
-            latitude: float,
-            longitude: float,
-            altitude: int,
-            model: str,
-            rx_time: Optional[datetime] = None,
-        ) -> None:
-        self.serial = serial
-        self.frame = frame_num
-        self.latitude = latitude
-        self.longitude = longitude
-        self.altitude = altitude
-        self.model = model
-        self.time = rx_time
-
-    def calculate_distance(self, observer: Tuple[float, float]) -> float:
-        """
-        Calculate distance from a certain observer point (lat, lon) to the sondeh.
-        Returns distance in meters.
-        """
-    
-        return geopy.distance.geodesic(
-            observer,
-            (self.latitude, self.longitude)
-        ).m
-
-    @classmethod
-    def from_autorx(cls, payload_summary: Dict[str, Any]) -> Self:
-        """Initialize a SondeFrame from an AutoRX UDP payload summary"""
-
-        return cls(
-            serial=payload_summary["callsign"],
-            frame_num=payload_summary["frame"],
-            latitude=payload_summary["latitude"],
-            longitude=payload_summary["longitude"],
-            altitude=payload_summary["altitude"],
-            model=payload_summary["model"]
-            # Can't set RX time from the payload summary due to leap seconds and missing date
-        )
-
 class Notifier:
     def __init__(self, config: Dict[str, Any]) -> None:
         logging.info("Initializing notifier")
@@ -91,7 +45,7 @@ class Notifier:
         self.sondes_altitudes = defaultdict(lambda: deque(maxlen=5))
         self.sondes_altitudes_lock = Lock()
 
-        self.tracked_sondes: Dict[str, SondeFrame] = {}
+        self.tracked_sondes: Dict[str, autorx.SondeFrame] = {}
         self.tracked_sondes_lock = Lock()
 
         self.notified_sondes = defaultdict(list)
@@ -150,25 +104,21 @@ class Notifier:
         if len(self.notification_services) == 0:
             logging.warning("No notification services enabled")
 
-    def _handle_packet(self, packet: Dict[str, Any]):
+    def _handle_packet(self, frame: autorx.SondeFrame):
         """Internal callback function to handle payload summaries from AutoRX"""
 
-        # Parse payload summary and set time
-        sonde_frame = SondeFrame.from_autorx(packet)
-        sonde_frame.time = datetime.now(timezone.utc)
-
-        logging.debug(f"Got packet #{sonde_frame.frame} from sonde {sonde_frame.serial}")
+        logging.debug(f"Got packet #{frame.frame} from sonde {frame.serial}")
 
         # Update internal list
         with self.tracked_sondes_lock:
             # Log message if sonde is new
-            if sonde_frame.serial not in self.tracked_sondes:
-                logging.info(f"Got new {sonde_frame.model} sonde: {sonde_frame.serial}")
+            if frame.serial not in self.tracked_sondes:
+                logging.info(f"Got new {frame.model} sonde: {frame.serial}")
 
-            self.tracked_sondes[sonde_frame.serial] = sonde_frame
+            self.tracked_sondes[frame.serial] = frame
 
         with self.sondes_altitudes_lock:
-            self.sondes_altitudes[sonde_frame.serial].append(sonde_frame.altitude)
+            self.sondes_altitudes[frame.serial].append(frame.altitude)
     
     def _purge_old_tracked(self):
         """Internal function to remove all old sondes from tracked_sondes dict"""
@@ -204,7 +154,7 @@ class Notifier:
 
     def _notify_rangering(
             self,
-            latest_frame: SondeFrame,
+            latest_frame: autorx.SondeFrame,
             triggered_ring: RangeRing,
             distance: float
         ):
@@ -217,7 +167,7 @@ class Notifier:
 
     def _notify_rangering_prediction(
             self,
-            latest_frame: SondeFrame,
+            latest_frame: autorx.SondeFrame,
             landing_prediction: prediction.LandingPrediction,
             triggered_ring: RangeRing,
             prediction_distance: float

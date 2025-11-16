@@ -3,12 +3,59 @@ import logging
 import socket
 import traceback
 from collections.abc import Callable
+from datetime import datetime, timezone
 from threading import Thread
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Self, Tuple
 
+import geopy.distance
+
+
+class SondeFrame:
+    def __init__(
+            self,
+            serial: str,
+            frame_num: int,
+            latitude: float,
+            longitude: float,
+            altitude: int,
+            model: str,
+            rx_time: Optional[datetime] = None,
+        ) -> None:
+        self.serial = serial
+        self.frame = frame_num
+        self.latitude = latitude
+        self.longitude = longitude
+        self.altitude = altitude
+        self.model = model
+        self.time = rx_time
+
+    def calculate_distance(self, observer: Tuple[float, float]) -> float:
+        """
+        Calculate distance from a certain observer point (lat, lon) to the sondeh.
+        Returns distance in meters.
+        """
+    
+        return geopy.distance.geodesic(
+            observer,
+            (self.latitude, self.longitude)
+        ).m
+
+    @classmethod
+    def from_autorx(cls, payload_summary: Dict[str, Any]) -> Self:
+        """Initialize a SondeFrame from an AutoRX UDP payload summary"""
+
+        return cls(
+            serial=payload_summary["callsign"],
+            frame_num=payload_summary["frame"],
+            latitude=payload_summary["latitude"],
+            longitude=payload_summary["longitude"],
+            altitude=payload_summary["altitude"],
+            model=payload_summary["model"]
+            # Can't set RX time from the payload summary due to leap seconds and missing date
+        )
 
 class AutoRXListener():
-    def __init__(self, autorx_host: str, autorx_port: int, callback: Callable[[Dict[str, Any]], None]):
+    def __init__(self, autorx_host: str, autorx_port: int, callback: Callable[[SondeFrame], None]):
 
         self.autorx_host = autorx_host
         self.autorx_port = autorx_port
@@ -42,7 +89,14 @@ class AutoRXListener():
                 try:
                     packet = json.loads(self._socket.recvfrom(1024)[0])
                     if packet["type"] == "PAYLOAD_SUMMARY":
-                        self.callback(packet)
+                        # Parse payload summary and set time
+                        try:
+                            sonde_frame = SondeFrame.from_autorx(packet)
+                            sonde_frame.time = datetime.now(timezone.utc)
+                        except Exception as e:
+                            logging.error("Error while parsing AutoRX UDP payload summary: "+str(e))
+                        else:
+                            self.callback(sonde_frame)
                 except socket.timeout:
                     pass
         except (KeyboardInterrupt, Exception) as e:

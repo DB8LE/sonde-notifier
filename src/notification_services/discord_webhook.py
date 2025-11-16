@@ -2,7 +2,8 @@ from typing import Any, Dict
 
 import requests
 
-from ..notifier import RangeRing, SondeFrame
+from ..notifier import RangeRing
+from ..autorx import SondeFrame
 from ..prediction import LandingPrediction
 
 from .notification_service import NotificationService
