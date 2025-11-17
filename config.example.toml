@@ -24,8 +24,8 @@ range_rings = [
     # If a range ring gets triggerd by a sonde, all range rings below it in this list
     # will also be counted as triggered, so order them so that the largest ones are at the bottom
     # and the smallest ones at the top of the list.
-    { name = "inner", radius = 10, max_altitude = 3 },
-    { name = "outer", radius = 50, max_altitude = 8 }
+    { name = "inner", radius = 10, max_altitude = 3, only_descending = true },
+    { name = "outer", radius = 50, max_altitude = 8, only_descending = true }
 ]
 
 [prediction]

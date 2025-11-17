@@ -12,11 +12,12 @@ from . import autorx, prediction
 TRACKED_SONDES_MAX_SECONDS = 5*60*60
 
 class RangeRing:
-    def __init__(self, id: int, name: str, range: int, max_altitude: int, prefix: str = "") -> None:
+    def __init__(self, id: int, name: str, range: int, max_altitude: int, only_descending: bool, prefix: str = "") -> None:
         self.id = id
         self.name = name
         self.range = range # meters
         self.max_altitude = max_altitude # meters
+        self.only_descending = only_descending
         self.prefix = prefix
 
     def as_string(self, type: Literal["name", "id"], prefix_overwrite: str = "") -> str:
@@ -69,7 +70,8 @@ class Notifier:
                         id=id,
                         name=str(range_ring["name"]).replace("_", "-"),
                         range=int(range_ring["radius"]*1000),
-                        max_altitude=int(range_ring["max_altitude"]*1000)
+                        max_altitude=int(range_ring["max_altitude"]*1000),
+                        only_descending=range_ring["only_descending"]
                     )
                 )
         except KeyError as e:
@@ -184,6 +186,7 @@ class Notifier:
             serial: str,
             distance: float,
             altitude: float,
+            descending: bool,
             ring_prefix: str = ""
         ) -> RangeRing | None:
         """Internal function to check for range ring hits for a specified sonde"""
@@ -191,6 +194,10 @@ class Notifier:
         for ring in self.range_rings:
             # Skip already triggered rings
             if ring.as_string("id", ring_prefix) in self.notified_sondes[serial]:
+                continue
+
+            # Skip if ring only allows descending sondes and sonde is not descending
+            if ring.only_descending and not descending:
                 continue
 
             # Check if ring should be triggered
@@ -227,10 +234,17 @@ class Notifier:
 
         with self.tracked_sondes_lock and self.notified_sondes_lock and self.sondes_altitudes_lock:
             for serial, frame in self.tracked_sondes.items():
+                # Determine wether sonde is descending or not
+                altitudes = self.sondes_altitudes[serial]
+                if len(altitudes) < 3:
+                    is_descending = False # Assume sonde is rising if there are less than 3 received frames
+                else:
+                    is_descending = all(altitudes[i] > altitudes[i+1] for i in range(len(altitudes) - 1))
+
                 # Calculate distance to sonde
                 sonde_distance = frame.calculate_distance(self.station_position)
 
-                triggered_ring = self._check_range_rings(serial, sonde_distance, frame.altitude)
+                triggered_ring = self._check_range_rings(serial, sonde_distance, frame.altitude, is_descending)
                 if triggered_ring is not None:
                     self._notify_rangering(frame, triggered_ring, sonde_distance)
                     self._set_ring_notified(serial, triggered_ring)
@@ -239,8 +253,7 @@ class Notifier:
                     assert self.prediction_engine is not None # impossible, just to make typechecker happy
 
                     # Only run if 3 frames have been received already
-                    alts = self.sondes_altitudes[serial]
-                    if len(alts) < 3:
+                    if len(altitudes) < 3:
                         logging.debug(f"Skipping prediciton for sonde {serial} because not enought frames have been received")
                         continue
 
@@ -250,9 +263,6 @@ class Notifier:
                     if round(frame_age) > self.notify_check_interval:
                         logging.debug(f"Skipping prediciton for sonde {serial} as last receive was too long ago")
                         continue
-
-                    # Determine wether sonde is descending or not
-                    is_descending = all(alts[i] > alts[i+1] for i in range(len(alts) - 1))
 
                     # If option to only predict for descending sondes is set and sonde is not descending, skip
                     if self.only_predict_descending and (not is_descending):
@@ -279,7 +289,13 @@ class Notifier:
                     prediction_distance = landing_prediction.calculate_distance(self.station_position)
 
                     # Check for range ring hits
-                    triggered_ring = self._check_range_rings(serial, prediction_distance, landing_prediction.altitude, "prediction")
+                    triggered_ring = self._check_range_rings(
+                        serial,
+                        prediction_distance,
+                        landing_prediction.altitude,
+                        is_descending,
+                        "prediction"
+                    )
                     if triggered_ring is not None:
                         self._notify_rangering_prediction(frame, landing_prediction, triggered_ring, prediction_distance)
                         self._set_ring_notified(serial, triggered_ring)
