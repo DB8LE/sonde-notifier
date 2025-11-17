@@ -39,7 +39,8 @@ class DiscordWebhookNotifier(NotificationService):
             latest_frame: SondeFrame,
             landing_prediction: LandingPrediction,
             triggered_ring: RangeRing,
-            prediction_distance: float # meters
+            prediction_distance: float, # meters
+            latest_distance: float # meters
         ) -> None:
         notification_text = f"A landing prediction for an {latest_frame.model} sonde has triggered range ring {triggered_ring.name}. (Serial: {latest_frame.serial})"
         

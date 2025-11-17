@@ -172,14 +172,21 @@ class Notifier:
             latest_frame: autorx.SondeFrame,
             landing_prediction: prediction.LandingPrediction,
             triggered_ring: RangeRing,
-            prediction_distance: float
+            prediction_distance: float,
+            latest_distance: float
         ):
         """Internal function to send range ring notifications for a specific sonde"""
 
         logging.info(f"Sending notifications for prediction of sonde {latest_frame.serial} triggering range ring {triggered_ring.name}")
 
         for service in self.notification_services:
-            service.notify_rangering_prediction(latest_frame, landing_prediction, triggered_ring, prediction_distance)
+            service.notify_rangering_prediction(
+                latest_frame,
+                landing_prediction,
+                triggered_ring,
+                prediction_distance,
+                latest_distance
+            )
 
     def _check_range_rings(
             self,
@@ -297,7 +304,13 @@ class Notifier:
                         "prediction"
                     )
                     if triggered_ring is not None:
-                        self._notify_rangering_prediction(frame, landing_prediction, triggered_ring, prediction_distance)
+                        self._notify_rangering_prediction(
+                            frame,
+                            landing_prediction,
+                            triggered_ring,
+                            prediction_distance,
+                            sonde_distance
+                        )
                         self._set_ring_notified(serial, triggered_ring)
 
         self.notification_check_cycles += 1

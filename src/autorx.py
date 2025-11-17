@@ -19,14 +19,16 @@ class SondeFrame:
             longitude: float,
             altitude: int,
             model: str,
+            frequency: float,
             rx_time: Optional[datetime] = None,
         ) -> None:
         self.serial = serial
         self.frame = frame_num
         self.latitude = latitude
         self.longitude = longitude
-        self.altitude = altitude
+        self.altitude = altitude # meters
         self.model = model
+        self.frequency = frequency # MHz
         self.time = rx_time
 
     def calculate_distance(self, observer: Tuple[float, float]) -> float:
@@ -50,7 +52,8 @@ class SondeFrame:
             latitude=payload_summary["latitude"],
             longitude=payload_summary["longitude"],
             altitude=payload_summary["altitude"],
-            model=payload_summary["model"]
+            model=payload_summary["model"],
+            frequency=float(payload_summary["freq"][:-4])
             # Can't set RX time from the payload summary due to leap seconds and missing date
         )
 

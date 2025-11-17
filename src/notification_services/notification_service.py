@@ -31,7 +31,8 @@ class NotificationService(ABC):
             latest_frame: SondeFrame,
             landing_prediction: LandingPrediction,
             triggered_ring: RangeRing,
-            prediction_distance: float # meters
+            prediction_distance: float, # meters
+            latest_distance: float # meters
         ) -> None:
         """Send a prediction range ring notification using this notification service"""
         pass

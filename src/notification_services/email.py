@@ -51,7 +51,17 @@ class EmailNotifier(NotificationService):
             distance: float # meters
         ) -> None:
         title = f"{latest_frame.model} sonde triggered range ring {triggered_ring.name}"
-        content = f"Serial: {latest_frame.serial}\nDistance: {distance}km\nhttps://sondehub.org/{latest_frame.serial}"
+        content = f"""
+Serial:    {latest_frame.serial}
+Type:      {latest_frame.model}
+Distance:  {round(distance/1000, 1)}km (treshold: {round(triggered_ring.range, 1)}km)
+Altitude:  {round(latest_frame.altitude, 0)}m (treshold: {round(triggered_ring.max_altitude, 1)}m)
+Frequency: {round(latest_frame.frequency, 2)} MHz
+Position:  {round(latest_frame.latitude, 5)} {round(latest_frame.longitude, 5)}
+        
+Track on Sondehub:
+https://sondehub.org/{latest_frame.serial}
+"""
 
         self._send_notification(title, content)
 
@@ -60,10 +70,29 @@ class EmailNotifier(NotificationService):
             latest_frame: SondeFrame,
             landing_prediction: LandingPrediction,
             triggered_ring: RangeRing,
-            prediction_distance: float # meters
+            prediction_distance: float, # meters
+            latest_distance: float # meters
         ) -> None:
-        title = f"{latest_frame.model} sonde prediction triggered range ring {triggered_ring.name}"
-        content = f"Serial: {latest_frame.serial}\nDistance: {prediction_distance}km\nhttps://sondehub.org/{latest_frame.serial}"
+        title = f"{latest_frame.model} sonde landing prediction triggered range ring {triggered_ring.name}"
+        content = f"""
+Serial:    {latest_frame.serial}
+Type:      {latest_frame.model}
+Frequency: {round(latest_frame.frequency, 2)} MHz
+        
+Predicted data
+Landing Time:      {landing_prediction.landing_time.strftime("%Y-%m-%d %H:%M:%SZ")}
+Landing Distance:  {round(prediction_distance/1000, 1)}km (treshold: {round(triggered_ring.range, 1)}km)
+Landing Altitude:  {round(landing_prediction.altitude, 0)}m (treshold: {round(triggered_ring.max_altitude, 1)}m)
+Landing Position:  {round(landing_prediction.latitude, 5)} {round(landing_prediction.longitude, 5)}
+        
+Current data
+Distance:  {round(latest_distance/1000, 1)}km (treshold: {round(triggered_ring.range, 1)}km)
+Altitude:  {round(latest_frame.altitude, 0)}m (treshold: {round(triggered_ring.max_altitude, 1)}m)
+Position:  {round(latest_frame.latitude, 5)} {round(latest_frame.longitude, 5)}
+
+Track on Sondehub:
+https://sondehub.org/{latest_frame.serial}
+"""
 
         self._send_notification(title, content)
 
