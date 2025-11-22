@@ -54,9 +54,9 @@ class EmailNotifier(NotificationService):
         content = f"""
 Serial:    {latest_frame.serial}
 Type:      {latest_frame.model}
+Frequency: {round(latest_frame.frequency, 2)} MHz
 Distance:  {round(distance/1000, 1)}km (treshold: {round(triggered_ring.range, 1)}km)
 Altitude:  {round(latest_frame.altitude, 0)}m (treshold: {round(triggered_ring.max_altitude, 1)}m)
-Frequency: {round(latest_frame.frequency, 2)} MHz
 Position:  {round(latest_frame.latitude, 5)} {round(latest_frame.longitude, 5)}
         
 Track on Sondehub:
