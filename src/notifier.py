@@ -5,7 +5,7 @@ import traceback
 from collections import defaultdict, deque
 from datetime import datetime, timezone
 from threading import Lock
-from typing import Any, Dict, List, Literal, Optional, Self, Tuple
+from typing import Any, Dict, List, Literal
 
 from . import autorx, prediction
 

@@ -3,10 +3,9 @@ from urllib.parse import urljoin
 
 import requests
 
-from ..notifier import RangeRing
 from ..autorx import SondeFrame
+from ..notifier import RangeRing
 from ..prediction import LandingPrediction
-
 from .notification_service import NotificationService
 
 

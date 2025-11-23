@@ -4,10 +4,9 @@ from typing import Any, Dict
 
 import requests
 
-from ..notifier import RangeRing
 from ..autorx import SondeFrame
+from ..notifier import RangeRing
 from ..prediction import LandingPrediction
-
 from .notification_service import NotificationService
 
 

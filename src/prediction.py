@@ -1,13 +1,12 @@
 import json
 import logging
-
-import requests
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional, Tuple
 
 import geopy.distance
+import requests
 
-    
+
 class LandingPrediction:
     def __init__(
             self,
